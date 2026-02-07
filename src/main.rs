@@ -49,6 +49,8 @@ fn run() -> io::Result<()> {
         );
     }
 
+    print_summary(&plans);
+
     if config.dry_run {
         println!("Dry run: no files have been moved.");
         if !prompt_yes_no("Proceed with these moves? (y/n): ")? {
@@ -105,6 +107,36 @@ fn prompt_yes_no(message: &str) -> io::Result<bool> {
             _ => println!("Please enter y or n."),
         }
     }
+}
+
+fn print_summary(plans: &[organizer::MovePlan]) {
+    let mut images = 0usize;
+    let mut documents = 0usize;
+    let mut videos = 0usize;
+    let mut audio = 0usize;
+    let mut archives = 0usize;
+    let mut others = 0usize;
+
+    for plan in plans {
+        match plan.category {
+            rules::Category::Images => images += 1,
+            rules::Category::Documents => documents += 1,
+            rules::Category::Videos => videos += 1,
+            rules::Category::Audio => audio += 1,
+            rules::Category::Archives => archives += 1,
+            rules::Category::Others => others += 1,
+        }
+    }
+
+    let total = plans.len();
+    println!("Summary:");
+    println!("Images: {}", images);
+    println!("Documents: {}", documents);
+    println!("Videos: {}", videos);
+    println!("Audio: {}", audio);
+    println!("Archives: {}", archives);
+    println!("Others: {}", others);
+    println!("Total: {}", total);
 }
 
 fn validate_directory(path: &Path) -> io::Result<()> {
