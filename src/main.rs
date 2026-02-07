@@ -22,10 +22,8 @@ fn run() -> io::Result<()> {
         return Ok(());
     }
 
-    for file in files {
-        let category = rules::classify(&file);
-        println!("{}: {}", category, file.display());
-    }
+    organizer::move_files(&dir, &files)?;
+    println!("Moved {} file(s).", files.len());
 
     Ok(())
 }
