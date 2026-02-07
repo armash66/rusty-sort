@@ -10,6 +10,7 @@ A simple Rust CLI that organizes files in a folder into category subfolders by e
 - Safe by default: no overwrites (existing targets are skipped).
 - `--dry-run` preview with optional confirmation.
 - Summary counts per category.
+- Moved/skipped counts per category.
 
 ## Requirements
 

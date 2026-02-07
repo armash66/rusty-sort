@@ -59,6 +59,31 @@ pub struct MovePlan {
 pub struct MoveResult {
     pub moved: usize,
     pub skipped: usize,
+    pub moved_by_category: CategoryCounts,
+    pub skipped_by_category: CategoryCounts,
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct CategoryCounts {
+    pub images: usize,
+    pub documents: usize,
+    pub videos: usize,
+    pub audio: usize,
+    pub archives: usize,
+    pub others: usize,
+}
+
+impl CategoryCounts {
+    fn inc(&mut self, category: Category) {
+        match category {
+            Category::Images => self.images += 1,
+            Category::Documents => self.documents += 1,
+            Category::Videos => self.videos += 1,
+            Category::Audio => self.audio += 1,
+            Category::Archives => self.archives += 1,
+            Category::Others => self.others += 1,
+        }
+    }
 }
 
 pub fn plan_moves(dest_dir: &Path, files: &[PathBuf]) -> Vec<MovePlan> {
@@ -90,10 +115,13 @@ pub fn plan_moves(dest_dir: &Path, files: &[PathBuf]) -> Vec<MovePlan> {
 pub fn apply_moves(plans: &[MovePlan]) -> io::Result<MoveResult> {
     let mut moved = 0usize;
     let mut skipped = 0usize;
+    let mut moved_by_category = CategoryCounts::default();
+    let mut skipped_by_category = CategoryCounts::default();
 
     for plan in plans {
         if plan.target.exists() {
             skipped += 1;
+            skipped_by_category.inc(plan.category);
             continue;
         }
         if let Some(parent) = plan.target.parent() {
@@ -101,9 +129,15 @@ pub fn apply_moves(plans: &[MovePlan]) -> io::Result<MoveResult> {
         }
         fs::rename(&plan.source, &plan.target)?;
         moved += 1;
+        moved_by_category.inc(plan.category);
     }
 
-    Ok(MoveResult { moved, skipped })
+    Ok(MoveResult {
+        moved,
+        skipped,
+        moved_by_category,
+        skipped_by_category,
+    })
 }
 
 fn category_folder_name(category: Category) -> &'static str {

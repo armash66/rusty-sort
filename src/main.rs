@@ -81,6 +81,14 @@ fn run() -> io::Result<()> {
     print_section("Result");
     println!("Moved:   {}", result.moved);
     println!("Skipped: {}", result.skipped);
+    if result.moved > 0 {
+        print_section("Moved By Category");
+        print_category_counts(&result.moved_by_category);
+    }
+    if result.skipped > 0 {
+        print_section("Skipped By Category");
+        print_category_counts(&result.skipped_by_category);
+    }
 
     let final_files = gather_files(&config)?;
     save_state(&config.src, &final_files)?;
@@ -269,14 +277,7 @@ fn print_plan(title: &str, plans: &[organizer::MovePlan]) {
 fn count_files_by_category(files: &[PathBuf]) -> CategoryCounts {
     let mut counts = CategoryCounts::default();
     for file in files {
-        match rules::classify(file) {
-            rules::Category::Images => counts.images += 1,
-            rules::Category::Documents => counts.documents += 1,
-            rules::Category::Videos => counts.videos += 1,
-            rules::Category::Audio => counts.audio += 1,
-            rules::Category::Archives => counts.archives += 1,
-            rules::Category::Others => counts.others += 1,
-        }
+        counts.inc(rules::classify(file));
     }
     counts
 }
@@ -295,6 +296,15 @@ fn print_scan_summary(counts: &CategoryCounts, total: usize, to_move: usize) {
     println!("To move: {}", to_move);
 }
 
+fn print_category_counts(counts: &organizer::CategoryCounts) {
+    println!("Images: {}", counts.images);
+    println!("Documents: {}", counts.documents);
+    println!("Videos: {}", counts.videos);
+    println!("Audio: {}", counts.audio);
+    println!("Archives: {}", counts.archives);
+    println!("Others: {}", counts.others);
+}
+
 #[derive(Default)]
 struct CategoryCounts {
     images: usize,
@@ -303,6 +313,19 @@ struct CategoryCounts {
     audio: usize,
     archives: usize,
     others: usize,
+}
+
+impl CategoryCounts {
+    fn inc(&mut self, category: rules::Category) {
+        match category {
+            rules::Category::Images => self.images += 1,
+            rules::Category::Documents => self.documents += 1,
+            rules::Category::Videos => self.videos += 1,
+            rules::Category::Audio => self.audio += 1,
+            rules::Category::Archives => self.archives += 1,
+            rules::Category::Others => self.others += 1,
+        }
+    }
 }
 
 fn validate_directory(path: &Path) -> io::Result<()> {
