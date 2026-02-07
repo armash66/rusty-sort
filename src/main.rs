@@ -1,9 +1,15 @@
 use std::env;
 use std::io;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 mod organizer;
 mod rules;
+
+struct Config {
+    dir: PathBuf,
+    dry_run: bool,
+}
 
 fn main() {
     if let Err(err) = run() {
@@ -13,34 +19,92 @@ fn main() {
 }
 
 fn run() -> io::Result<()> {
-    let dir = parse_args()?;
-    validate_directory(&dir)?;
+    let config = parse_args()?;
+    validate_directory(&config.dir)?;
 
-    let files = organizer::list_files(&dir)?;
+    let files = organizer::list_files(&config.dir)?;
     if files.is_empty() {
         println!("No files found.");
         return Ok(());
     }
 
-    organizer::move_files(&dir, &files)?;
-    println!("Moved {} file(s).", files.len());
+    println!("Reading from: {}", config.dir.display());
+    println!("Writing to: {}", config.dir.display());
+
+    let plans = organizer::plan_moves(&config.dir, &files);
+
+    println!("Plan:");
+    for plan in &plans {
+        let exists_note = if plan.target.exists() {
+            " (target exists)"
+        } else {
+            ""
+        };
+        println!(
+            "[{}] {} -> {}{}",
+            plan.category,
+            plan.source.display(),
+            plan.target.display(),
+            exists_note
+        );
+    }
+
+    if config.dry_run {
+        println!("Dry run: no files have been moved.");
+        if !prompt_yes_no("Proceed with these moves? (y/n): ")? {
+            println!("No changes made.");
+            return Ok(());
+        }
+    }
+
+    organizer::apply_moves(&plans)?;
+    println!("Moved {} file(s).", plans.len());
 
     Ok(())
 }
 
-fn parse_args() -> io::Result<PathBuf> {
-    let mut args = env::args().skip(1);
-    let path = match (args.next(), args.next()) {
-        (Some(path), None) => PathBuf::from(path),
-        _ => {
+fn parse_args() -> io::Result<Config> {
+    let mut dry_run = false;
+    let mut path: Option<PathBuf> = None;
+
+    for arg in env::args().skip(1) {
+        if arg == "--dry-run" || arg == "-n" {
+            dry_run = true;
+        } else if path.is_none() {
+            path = Some(PathBuf::from(arg));
+        } else {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "Usage: rusty-sort <folder_path>",
-            ))
+                "Usage: rusty-sort <folder_path> [--dry-run]",
+            ));
         }
     };
 
-    Ok(path)
+    let Some(path) = path else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Usage: rusty-sort <folder_path> [--dry-run]",
+        ));
+    };
+
+    Ok(Config { dir: path, dry_run })
+}
+
+fn prompt_yes_no(message: &str) -> io::Result<bool> {
+    let mut input = String::new();
+
+    loop {
+        print!("{}", message);
+        io::stdout().flush()?;
+        input.clear();
+        io::stdin().read_line(&mut input)?;
+
+        match input.trim().to_ascii_lowercase().as_str() {
+            "y" | "yes" => return Ok(true),
+            "n" | "no" => return Ok(false),
+            _ => println!("Please enter y or n."),
+        }
+    }
 }
 
 fn validate_directory(path: &Path) -> io::Result<()> {

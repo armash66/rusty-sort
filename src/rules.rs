@@ -25,14 +25,25 @@ impl fmt::Display for Category {
     }
 }
 
-const IMAGES: &[&str] = &["jpg", "jpeg", "png", "gif", "bmp", "tiff", "webp", "svg", "heic"];
-const DOCUMENTS: &[&str] = &[
-    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "md", "rtf", "csv", "json",
-    "yaml", "yml",
+const IMAGES: &[&str] = &[
+    "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "svg", "heic", "heif", "ico",
+    "raw", "nef", "cr2", "arw", "dng",
 ];
-const VIDEOS: &[&str] = &["mp4", "mkv", "mov", "avi", "wmv", "flv", "webm", "m4v"];
-const AUDIO: &[&str] = &["mp3", "wav", "flac", "aac", "ogg", "m4a", "wma"];
-const ARCHIVES: &[&str] = &["zip", "rar", "7z", "tar", "gz", "bz2", "xz"];
+const DOCUMENTS: &[&str] = &[
+    "pdf", "doc", "docx", "docm", "xls", "xlsx", "xlsm", "ppt", "pptx", "pptm", "txt", "md",
+    "rtf", "csv", "tsv", "json", "yaml", "yml", "xml", "log", "ini", "cfg",
+];
+const VIDEOS: &[&str] = &[
+    "mp4", "mkv", "mov", "avi", "wmv", "flv", "webm", "m4v", "3gp", "3g2", "mpg", "mpeg",
+    "ts", "mts",
+];
+const AUDIO: &[&str] = &[
+    "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "aiff", "aif", "amr", "opus",
+];
+const ARCHIVES: &[&str] = &[
+    "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "tgz", "tbz2", "lz", "lzma", "zst",
+    "iso",
+];
 
 pub fn classify(path: &Path) -> Category {
     let ext = path

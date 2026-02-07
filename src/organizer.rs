@@ -18,27 +18,49 @@ pub fn list_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
     Ok(files)
 }
 
-pub fn move_files(dir: &Path, files: &[PathBuf]) -> io::Result<()> {
+pub struct MovePlan {
+    pub source: PathBuf,
+    pub target: PathBuf,
+    pub category: Category,
+}
+
+pub fn plan_moves(dir: &Path, files: &[PathBuf]) -> Vec<MovePlan> {
+    let mut plans = Vec::new();
+
     for file in files {
         let category = rules::classify(file);
-        let target_dir = dir.join(category_folder_name(category));
-        if !target_dir.exists() {
-            fs::create_dir_all(&target_dir)?;
-        }
-
         let file_name = match file.file_name() {
             Some(name) => name,
             None => continue,
         };
+        let target_dir = dir.join(category_folder_name(category));
         let target_path = target_dir.join(file_name);
-        if target_path.exists() {
+
+        plans.push(MovePlan {
+            source: file.clone(),
+            target: target_path,
+            category,
+        });
+    }
+
+    plans
+}
+
+pub fn apply_moves(plans: &[MovePlan]) -> io::Result<()> {
+    for plan in plans {
+        if plan.target.exists() {
             return Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
-                format!("Target already exists: {}", target_path.display()),
+                format!("Target already exists: {}", plan.target.display()),
             ));
         }
+    }
 
-        fs::rename(file, target_path)?;
+    for plan in plans {
+        if let Some(parent) = plan.target.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::rename(&plan.source, &plan.target)?;
     }
 
     Ok(())
