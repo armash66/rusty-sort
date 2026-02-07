@@ -61,7 +61,7 @@ pub struct MoveResult {
     pub skipped: usize,
 }
 
-pub fn plan_moves(dir: &Path, files: &[PathBuf]) -> Vec<MovePlan> {
+pub fn plan_moves(dest_dir: &Path, files: &[PathBuf]) -> Vec<MovePlan> {
     let mut plans = Vec::new();
 
     for file in files {
@@ -70,7 +70,7 @@ pub fn plan_moves(dir: &Path, files: &[PathBuf]) -> Vec<MovePlan> {
             Some(name) => name,
             None => continue,
         };
-        let target_dir = dir.join(category_folder_name(category));
+        let target_dir = dest_dir.join(category_folder_name(category));
         let target_path = target_dir.join(file_name);
 
         if *file == target_path {

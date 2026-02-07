@@ -8,7 +8,8 @@ mod organizer;
 mod rules;
 
 struct Config {
-    dir: PathBuf,
+    src: PathBuf,
+    dest: PathBuf,
     dry_run: bool,
     recursive: bool,
 }
@@ -22,7 +23,8 @@ fn main() {
 
 fn run() -> io::Result<()> {
     let config = parse_args()?;
-    validate_directory(&config.dir)?;
+    validate_directory(&config.src)?;
+    ensure_destination(&config.dest)?;
 
     let files = gather_files(&config)?;
     if files.is_empty() {
@@ -31,18 +33,18 @@ fn run() -> io::Result<()> {
     }
 
     print_banner("Rusty Sort");
-    println!("Read:  {}", config.dir.display());
-    println!("Write: {}", config.dir.display());
+    println!("Read:  {}", config.src.display());
+    println!("Write: {}", config.dest.display());
 
-    let previous_state = load_previous_state(&config.dir)?;
+    let previous_state = load_previous_state(&config.src)?;
     if !previous_state.is_empty() {
-        let (added, removed) = diff_state(&previous_state, &files, &config.dir);
+        let (added, removed) = diff_state(&previous_state, &files, &config.src);
         print_section("Change Summary");
         println!("Added:   +{}", added);
         println!("Removed: -{}", removed);
     }
 
-    let mut plans = organizer::plan_moves(&config.dir, &files);
+    let mut plans = organizer::plan_moves(&config.dest, &files);
 
     let scan_counts = count_files_by_category(&files);
     print_scan_summary(&scan_counts, files.len(), plans.len());
@@ -66,7 +68,7 @@ fn run() -> io::Result<()> {
             );
         }
 
-        plans = organizer::plan_moves(&config.dir, &latest_files);
+        plans = organizer::plan_moves(&config.dest, &latest_files);
         if added > 0 || removed > 0 {
             let latest_counts = count_files_by_category(&latest_files);
             print_scan_summary(&latest_counts, latest_files.len(), plans.len());
@@ -81,7 +83,7 @@ fn run() -> io::Result<()> {
     println!("Skipped: {}", result.skipped);
 
     let final_files = gather_files(&config)?;
-    save_state(&config.dir, &final_files)?;
+    save_state(&config.src, &final_files)?;
 
     Ok(())
 }
@@ -89,32 +91,45 @@ fn run() -> io::Result<()> {
 fn parse_args() -> io::Result<Config> {
     let mut dry_run = false;
     let mut recursive = false;
-    let mut path: Option<PathBuf> = None;
+    let mut src: Option<PathBuf> = None;
+    let mut dest: Option<PathBuf> = None;
 
-    for arg in env::args().skip(1) {
+    let mut args = env::args().skip(1).peekable();
+    while let Some(arg) = args.next() {
         if arg == "--dry-run" || arg == "-n" {
             dry_run = true;
         } else if arg == "--recursive" || arg == "-r" {
             recursive = true;
-        } else if path.is_none() {
-            path = Some(PathBuf::from(arg));
+        } else if arg == "--to" {
+            let Some(value) = args.next() else {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Usage: rusty-sort <source> [--to <dest>] [--dry-run] [--recursive]",
+                ));
+            };
+            dest = Some(PathBuf::from(value));
+        } else if src.is_none() {
+            src = Some(PathBuf::from(arg));
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "Usage: rusty-sort <folder_path> [--dry-run] [--recursive]",
+                "Usage: rusty-sort <source> [--to <dest>] [--dry-run] [--recursive]",
             ));
         }
-    };
+    }
 
-    let Some(path) = path else {
+    let Some(src) = src else {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "Usage: rusty-sort <folder_path> [--dry-run] [--recursive]",
+            "Usage: rusty-sort <source> [--to <dest>] [--dry-run] [--recursive]",
         ));
     };
 
+    let dest = dest.unwrap_or_else(|| src.clone());
+
     Ok(Config {
-        dir: path,
+        src,
+        dest,
         dry_run,
         recursive,
     })
@@ -139,9 +154,9 @@ fn prompt_yes_no(message: &str) -> io::Result<bool> {
 
 fn gather_files(config: &Config) -> io::Result<Vec<PathBuf>> {
     if config.recursive {
-        organizer::list_files_recursive(&config.dir)
+        organizer::list_files_recursive(&config.src)
     } else {
-        organizer::list_files(&config.dir)
+        organizer::list_files(&config.src)
     }
 }
 
@@ -308,6 +323,19 @@ fn validate_directory(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
+fn ensure_destination(path: &Path) -> io::Result<()> {
+    if !path.exists() {
+        std::fs::create_dir_all(path)?;
+        return Ok(());
+    }
+    if !path.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Destination path is not a directory",
+        ));
+    }
+    Ok(())
+}
 fn print_banner(title: &str) {
     println!("== {} ==", title);
 }

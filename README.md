@@ -25,37 +25,49 @@ cargo build
 ## Usage
 
 ```powershell
-cargo run -- <folder_path>
+cargo run -- <source>
 ```
 
 Preview only:
 
 ```powershell
-cargo run -- <folder_path> --dry-run
+cargo run -- <source> --dry-run
+```
+
+Write to a different folder:
+
+```powershell
+cargo run -- <source> --to <dest>
 ```
 
 Recursive scan:
 
 ```powershell
-cargo run -- <folder_path> --recursive
+cargo run -- <source> --recursive
 ```
 
 Short flag:
 
 ```powershell
-cargo run -- <folder_path> -n
+cargo run -- <source> -n
 ```
 
 Short flag for recursive:
 
 ```powershell
-cargo run -- <folder_path> -r
+cargo run -- <source> -r
 ```
 
 ## Example
 
 ```powershell
 cargo run -- .\test-data --dry-run
+```
+
+Source to destination:
+
+```powershell
+cargo run -- .\test-data-2 --to .\test-data --recursive --dry-run
 ```
 
 Sample output:
