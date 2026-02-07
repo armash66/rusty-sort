@@ -4,7 +4,7 @@ A simple Rust CLI that organizes files in a folder into category subfolders by e
 
 ## Features
 
-- Scans a single directory (no recursion).
+- Scans a single directory (no recursion by default).
 - Categorizes by extension: Images, Documents, Videos, Audio, Archives, Others.
 - Creates category folders only when needed.
 - Safe by default: no overwrites (existing targets are skipped).
@@ -34,10 +34,22 @@ Preview only:
 cargo run -- <folder_path> --dry-run
 ```
 
+Recursive scan:
+
+```powershell
+cargo run -- <folder_path> --recursive
+```
+
 Short flag:
 
 ```powershell
 cargo run -- <folder_path> -n
+```
+
+Short flag for recursive:
+
+```powershell
+cargo run -- <folder_path> -r
 ```
 
 ## Example
@@ -68,8 +80,10 @@ Proceed with these moves? (y/n):
 
 ## Notes
 
-- The tool ignores subfolders (files only).
+- The tool ignores subfolders by default (use `--recursive` to include them).
 - If a target file already exists, that file is skipped.
+- If you want it to continuously watch a folder and auto-sort new files, that would be a separate "watch mode" feature.
+- The tool stores the last scan in `.rusty-sort-state.txt` to report changes between runs.
 
 ## Project Structure
 

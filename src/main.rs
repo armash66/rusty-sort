@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::env;
 use std::io;
 use std::io::Write;
@@ -9,6 +10,7 @@ mod rules;
 struct Config {
     dir: PathBuf,
     dry_run: bool,
+    recursive: bool,
 }
 
 fn main() {
@@ -22,65 +24,84 @@ fn run() -> io::Result<()> {
     let config = parse_args()?;
     validate_directory(&config.dir)?;
 
-    let files = organizer::list_files(&config.dir)?;
+    let files = gather_files(&config)?;
     if files.is_empty() {
         println!("No files found.");
         return Ok(());
     }
 
-    println!("Reading from: {}", config.dir.display());
-    println!("Writing to: {}", config.dir.display());
+    print_banner("Rusty Sort");
+    println!("Read:  {}", config.dir.display());
+    println!("Write: {}", config.dir.display());
 
-    let plans = organizer::plan_moves(&config.dir, &files);
-
-    println!("Plan:");
-    for plan in &plans {
-        let exists_note = if plan.target.exists() {
-            " (target exists)"
-        } else {
-            ""
-        };
-        println!(
-            "[{}] {} -> {}{}",
-            plan.category,
-            plan.source.display(),
-            plan.target.display(),
-            exists_note
-        );
+    let previous_state = load_previous_state(&config.dir)?;
+    if !previous_state.is_empty() {
+        let (added, removed) = diff_state(&previous_state, &files, &config.dir);
+        print_section("Change Summary");
+        println!("Added:   +{}", added);
+        println!("Removed: -{}", removed);
     }
 
-    print_summary(&plans);
+    let mut plans = organizer::plan_moves(&config.dir, &files);
+
+    let scan_counts = count_files_by_category(&files);
+    print_scan_summary(&scan_counts, files.len(), plans.len());
+    print_plan("Plan", &plans);
+    print_plan_summary(&plans);
 
     if config.dry_run {
-        println!("Dry run: no files have been moved.");
+        print_section("Dry Run");
+        println!("Preview complete.");
         if !prompt_yes_no("Proceed with these moves? (y/n): ")? {
             println!("No changes made.");
             return Ok(());
         }
+
+        let latest_files = gather_files(&config)?;
+        let (added, removed) = diff_files(&files, &latest_files);
+        if added > 0 || removed > 0 {
+            println!(
+                "Changes since preview: +{} new, -{} removed.",
+                added, removed
+            );
+        }
+
+        plans = organizer::plan_moves(&config.dir, &latest_files);
+        if added > 0 || removed > 0 {
+            let latest_counts = count_files_by_category(&latest_files);
+            print_scan_summary(&latest_counts, latest_files.len(), plans.len());
+            print_plan("Updated Plan", &plans);
+            print_plan_summary(&plans);
+        }
     }
 
     let result = organizer::apply_moves(&plans)?;
-    println!("Moved {} file(s).", result.moved);
-    if result.skipped > 0 {
-        println!("Skipped {} file(s) (target exists).", result.skipped);
-    }
+    print_section("Result");
+    println!("Moved:   {}", result.moved);
+    println!("Skipped: {}", result.skipped);
+
+    let final_files = gather_files(&config)?;
+    save_state(&config.dir, &final_files)?;
 
     Ok(())
 }
 
 fn parse_args() -> io::Result<Config> {
     let mut dry_run = false;
+    let mut recursive = false;
     let mut path: Option<PathBuf> = None;
 
     for arg in env::args().skip(1) {
         if arg == "--dry-run" || arg == "-n" {
             dry_run = true;
+        } else if arg == "--recursive" || arg == "-r" {
+            recursive = true;
         } else if path.is_none() {
             path = Some(PathBuf::from(arg));
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "Usage: rusty-sort <folder_path> [--dry-run]",
+                "Usage: rusty-sort <folder_path> [--dry-run] [--recursive]",
             ));
         }
     };
@@ -88,11 +109,15 @@ fn parse_args() -> io::Result<Config> {
     let Some(path) = path else {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "Usage: rusty-sort <folder_path> [--dry-run]",
+            "Usage: rusty-sort <folder_path> [--dry-run] [--recursive]",
         ));
     };
 
-    Ok(Config { dir: path, dry_run })
+    Ok(Config {
+        dir: path,
+        dry_run,
+        recursive,
+    })
 }
 
 fn prompt_yes_no(message: &str) -> io::Result<bool> {
@@ -112,7 +137,73 @@ fn prompt_yes_no(message: &str) -> io::Result<bool> {
     }
 }
 
-fn print_summary(plans: &[organizer::MovePlan]) {
+fn gather_files(config: &Config) -> io::Result<Vec<PathBuf>> {
+    if config.recursive {
+        organizer::list_files_recursive(&config.dir)
+    } else {
+        organizer::list_files(&config.dir)
+    }
+}
+
+fn diff_files(before: &[PathBuf], after: &[PathBuf]) -> (usize, usize) {
+    let before_set: HashSet<&PathBuf> = before.iter().collect();
+    let after_set: HashSet<&PathBuf> = after.iter().collect();
+
+    let added = after_set.difference(&before_set).count();
+    let removed = before_set.difference(&after_set).count();
+
+    (added, removed)
+}
+
+fn state_path(base_dir: &Path) -> PathBuf {
+    base_dir.join(".rusty-sort-state.txt")
+}
+
+fn load_previous_state(base_dir: &Path) -> io::Result<Vec<PathBuf>> {
+    let path = state_path(base_dir);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let content = std::fs::read_to_string(path)?;
+    let mut files = Vec::new();
+    for line in content.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        files.push(base_dir.join(line));
+    }
+    Ok(files)
+}
+
+fn save_state(base_dir: &Path, files: &[PathBuf]) -> io::Result<()> {
+    let mut lines = String::new();
+    for file in files {
+        if let Ok(rel) = file.strip_prefix(base_dir) {
+            lines.push_str(&rel.to_string_lossy());
+            lines.push('\n');
+        }
+    }
+    std::fs::write(state_path(base_dir), lines)
+}
+
+fn diff_state(previous: &[PathBuf], current: &[PathBuf], base_dir: &Path) -> (usize, usize) {
+    let prev_rel: HashSet<PathBuf> = previous
+        .iter()
+        .filter_map(|p| p.strip_prefix(base_dir).ok().map(|r| r.to_path_buf()))
+        .collect();
+    let curr_rel: HashSet<PathBuf> = current
+        .iter()
+        .filter_map(|p| p.strip_prefix(base_dir).ok().map(|r| r.to_path_buf()))
+        .collect();
+
+    let added = curr_rel.difference(&prev_rel).count();
+    let removed = prev_rel.difference(&curr_rel).count();
+
+    (added, removed)
+}
+
+fn print_plan_summary(plans: &[organizer::MovePlan]) {
     let mut images = 0usize;
     let mut documents = 0usize;
     let mut videos = 0usize;
@@ -132,7 +223,7 @@ fn print_summary(plans: &[organizer::MovePlan]) {
     }
 
     let total = plans.len();
-    println!("Summary:");
+    print_section("Plan Summary");
     println!("Images: {}", images);
     println!("Documents: {}", documents);
     println!("Videos: {}", videos);
@@ -140,6 +231,63 @@ fn print_summary(plans: &[organizer::MovePlan]) {
     println!("Archives: {}", archives);
     println!("Others: {}", others);
     println!("Total: {}", total);
+}
+
+fn print_plan(title: &str, plans: &[organizer::MovePlan]) {
+    print_section(title);
+    for plan in plans {
+        let exists_note = if plan.target.exists() {
+            " (target exists)"
+        } else {
+            ""
+        };
+        println!(
+            "[{}] {} -> {}{}",
+            plan.category,
+            plan.source.display(),
+            plan.target.display(),
+            exists_note
+        );
+    }
+}
+
+fn count_files_by_category(files: &[PathBuf]) -> CategoryCounts {
+    let mut counts = CategoryCounts::default();
+    for file in files {
+        match rules::classify(file) {
+            rules::Category::Images => counts.images += 1,
+            rules::Category::Documents => counts.documents += 1,
+            rules::Category::Videos => counts.videos += 1,
+            rules::Category::Audio => counts.audio += 1,
+            rules::Category::Archives => counts.archives += 1,
+            rules::Category::Others => counts.others += 1,
+        }
+    }
+    counts
+}
+
+fn print_scan_summary(counts: &CategoryCounts, total: usize, to_move: usize) {
+    let already_sorted = total.saturating_sub(to_move);
+    print_section("Scan Summary");
+    println!("Images: {}", counts.images);
+    println!("Documents: {}", counts.documents);
+    println!("Videos: {}", counts.videos);
+    println!("Audio: {}", counts.audio);
+    println!("Archives: {}", counts.archives);
+    println!("Others: {}", counts.others);
+    println!("Total files: {}", total);
+    println!("Already sorted: {}", already_sorted);
+    println!("To move: {}", to_move);
+}
+
+#[derive(Default)]
+struct CategoryCounts {
+    images: usize,
+    documents: usize,
+    videos: usize,
+    audio: usize,
+    archives: usize,
+    others: usize,
 }
 
 fn validate_directory(path: &Path) -> io::Result<()> {
@@ -158,4 +306,13 @@ fn validate_directory(path: &Path) -> io::Result<()> {
     }
 
     Ok(())
+}
+
+fn print_banner(title: &str) {
+    println!("== {} ==", title);
+}
+
+fn print_section(title: &str) {
+    println!();
+    println!("-- {} --", title);
 }

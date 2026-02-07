@@ -11,11 +11,43 @@ pub fn list_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
         let entry = entry?;
         let file_type = entry.file_type()?;
         if file_type.is_file() {
-            files.push(entry.path());
+            let path = entry.path();
+            if is_state_file(&path) {
+                continue;
+            }
+            files.push(path);
         }
     }
 
     Ok(files)
+}
+
+pub fn list_files_recursive(dir: &Path) -> io::Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    collect_files_recursive(dir, &mut files)?;
+    Ok(files)
+}
+
+fn collect_files_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let path = entry.path();
+        if file_type.is_file() {
+            if is_state_file(&path) {
+                continue;
+            }
+            files.push(path);
+        } else if file_type.is_dir() {
+            collect_files_recursive(&path, files)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn is_state_file(path: &Path) -> bool {
+    matches!(path.file_name().and_then(|n| n.to_str()), Some(".rusty-sort-state.txt"))
 }
 
 pub struct MovePlan {
@@ -40,6 +72,10 @@ pub fn plan_moves(dir: &Path, files: &[PathBuf]) -> Vec<MovePlan> {
         };
         let target_dir = dir.join(category_folder_name(category));
         let target_path = target_dir.join(file_name);
+
+        if *file == target_path {
+            continue;
+        }
 
         plans.push(MovePlan {
             source: file.clone(),

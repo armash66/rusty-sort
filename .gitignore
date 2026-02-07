@@ -1,3 +1,4 @@
 /target
 /.vs
 /test-data
+/.rusty-sort-state.txt
