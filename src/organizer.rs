@@ -2,7 +2,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::rules::{self, Category};
+use crate::rules::{Category, Rules};
 
 pub fn list_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
@@ -86,11 +86,11 @@ impl CategoryCounts {
     }
 }
 
-pub fn plan_moves(dest_dir: &Path, files: &[PathBuf]) -> Vec<MovePlan> {
+pub fn plan_moves(dest_dir: &Path, files: &[PathBuf], rules: &Rules) -> Vec<MovePlan> {
     let mut plans = Vec::new();
 
     for file in files {
-        let category = rules::classify(file);
+        let category = rules.classify(file);
         let file_name = match file.file_name() {
             Some(name) => name,
             None => continue,

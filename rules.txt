@@ -1,0 +1,6 @@
+Images=jpg,jpeg,png,webp,heic
+Documents=pdf,docx,md,txt,epub,xlsx,pptx,csv,log,yaml,yml,json
+Videos=mp4,mkv,mov
+Audio=mp3,wav,flac
+Archives=zip,7z,tar,gz
+Others=

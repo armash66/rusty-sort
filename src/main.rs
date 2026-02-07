@@ -12,6 +12,7 @@ struct Config {
     dest: PathBuf,
     dry_run: bool,
     recursive: bool,
+    config_path: Option<PathBuf>,
 }
 
 fn main() {
@@ -25,6 +26,8 @@ fn run() -> io::Result<()> {
     let config = parse_args()?;
     validate_directory(&config.src)?;
     ensure_destination(&config.dest)?;
+
+    let rules = load_rules(&config)?;
 
     let files = gather_files(&config)?;
     if files.is_empty() {
@@ -44,9 +47,9 @@ fn run() -> io::Result<()> {
         println!("Removed: -{}", removed);
     }
 
-    let mut plans = organizer::plan_moves(&config.dest, &files);
+    let mut plans = organizer::plan_moves(&config.dest, &files, &rules);
 
-    let scan_counts = count_files_by_category(&files);
+    let scan_counts = count_files_by_category(&files, &rules);
     print_scan_summary(&scan_counts, files.len(), plans.len());
     print_plan("Plan", &plans);
     print_plan_summary(&plans);
@@ -68,9 +71,9 @@ fn run() -> io::Result<()> {
             );
         }
 
-        plans = organizer::plan_moves(&config.dest, &latest_files);
+        plans = organizer::plan_moves(&config.dest, &latest_files, &rules);
         if added > 0 || removed > 0 {
-            let latest_counts = count_files_by_category(&latest_files);
+            let latest_counts = count_files_by_category(&latest_files, &rules);
             print_scan_summary(&latest_counts, latest_files.len(), plans.len());
             print_plan("Updated Plan", &plans);
             print_plan_summary(&plans);
@@ -101,6 +104,7 @@ fn parse_args() -> io::Result<Config> {
     let mut recursive = false;
     let mut src: Option<PathBuf> = None;
     let mut dest: Option<PathBuf> = None;
+    let mut config_path: Option<PathBuf> = None;
 
     let mut args = env::args().skip(1).peekable();
     while let Some(arg) = args.next() {
@@ -108,11 +112,19 @@ fn parse_args() -> io::Result<Config> {
             dry_run = true;
         } else if arg == "--recursive" || arg == "-r" {
             recursive = true;
+        } else if arg == "--config" {
+            let Some(value) = args.next() else {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Usage: rusty-sort <source> [--to <dest>] [--config <file>] [--dry-run] [--recursive]",
+                ));
+            };
+            config_path = Some(PathBuf::from(value));
         } else if arg == "--to" {
             let Some(value) = args.next() else {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    "Usage: rusty-sort <source> [--to <dest>] [--dry-run] [--recursive]",
+                    "Usage: rusty-sort <source> [--to <dest>] [--config <file>] [--dry-run] [--recursive]",
                 ));
             };
             dest = Some(PathBuf::from(value));
@@ -121,7 +133,7 @@ fn parse_args() -> io::Result<Config> {
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "Usage: rusty-sort <source> [--to <dest>] [--dry-run] [--recursive]",
+                "Usage: rusty-sort <source> [--to <dest>] [--config <file>] [--dry-run] [--recursive]",
             ));
         }
     }
@@ -129,7 +141,7 @@ fn parse_args() -> io::Result<Config> {
     let Some(src) = src else {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "Usage: rusty-sort <source> [--to <dest>] [--dry-run] [--recursive]",
+            "Usage: rusty-sort <source> [--to <dest>] [--config <file>] [--dry-run] [--recursive]",
         ));
     };
 
@@ -140,6 +152,7 @@ fn parse_args() -> io::Result<Config> {
         dest,
         dry_run,
         recursive,
+        config_path,
     })
 }
 
@@ -274,10 +287,10 @@ fn print_plan(title: &str, plans: &[organizer::MovePlan]) {
     }
 }
 
-fn count_files_by_category(files: &[PathBuf]) -> CategoryCounts {
+fn count_files_by_category(files: &[PathBuf], rules: &rules::Rules) -> CategoryCounts {
     let mut counts = CategoryCounts::default();
     for file in files {
-        counts.inc(rules::classify(file));
+        counts.inc(rules.classify(file));
     }
     counts
 }
@@ -358,6 +371,13 @@ fn ensure_destination(path: &Path) -> io::Result<()> {
         ));
     }
     Ok(())
+}
+
+fn load_rules(config: &Config) -> io::Result<rules::Rules> {
+    match &config.config_path {
+        Some(path) => rules::Rules::from_config(path),
+        None => Ok(rules::Rules::default()),
+    }
 }
 fn print_banner(title: &str) {
     println!("== {} ==", title);

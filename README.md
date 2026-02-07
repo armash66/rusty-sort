@@ -1,29 +1,30 @@
 # rusty-sort
 
-A simple Rust CLI that organizes files in a folder into category subfolders by extension.
+A simple Rust CLI that scans a directory and organizes files into category folders by extension.
 
 ## Features
 
-- Scans a single directory (no recursion by default).
-- Categorizes by extension: Images, Documents, Videos, Audio, Archives, Others.
-- Creates category folders only when needed.
-- Safe by default: no overwrites (existing targets are skipped).
-- `--dry-run` preview with optional confirmation.
-- Summary counts per category.
-- Moved/skipped counts per category.
+- Safe file organization (no overwrites; existing targets are skipped).
+- `--dry-run` preview with confirmation.
+- Optional recursive scan.
+- Optional source → destination mode.
+- Custom extension rules via config file.
+- Clear summaries and change tracking between runs.
 
 ## Requirements
 
 - Rust (stable, edition 2021)
 - Windows (MSVC or GNU toolchain)
 
-## Build
+## Install / Build
 
 ```powershell
 cargo build
 ```
 
-## Usage
+## Basic Usage
+
+Organize files inside the same folder:
 
 ```powershell
 cargo run -- <source>
@@ -35,10 +36,10 @@ Preview only:
 cargo run -- <source> --dry-run
 ```
 
-Write to a different folder:
+Short flag:
 
 ```powershell
-cargo run -- <source> --to <dest>
+cargo run -- <source> -n
 ```
 
 Recursive scan:
@@ -50,53 +51,53 @@ cargo run -- <source> --recursive
 Short flag:
 
 ```powershell
-cargo run -- <source> -n
-```
-
-Short flag for recursive:
-
-```powershell
 cargo run -- <source> -r
 ```
 
-## Example
+## Source → Destination
+
+Move files from one folder into categorized folders in another:
 
 ```powershell
-cargo run -- .\test-data --dry-run
+cargo run -- <source> --to <dest>
 ```
 
-Source to destination:
+Example:
 
 ```powershell
 cargo run -- .\test-data-2 --to .\test-data --recursive --dry-run
 ```
 
-Sample output:
+## Custom Rules
 
-```
-Reading from: .\test-data
-Writing to: .\test-data
-Plan:
-[Images] .\test-data\photo.jpg -> .\test-data\Images\photo.jpg
-[Documents] .\test-data\readme.txt -> .\test-data\Documents\readme.txt
-Summary:
-Images: 1
-Documents: 1
-Videos: 0
-Audio: 0
-Archives: 0
-Others: 0
-Total: 2
-Dry run: no files have been moved.
-Proceed with these moves? (y/n):
+Create a rules file (e.g. `rules.txt`) and pass it with `--config`:
+
+```powershell
+cargo run -- <source> --config .\rules.txt
 ```
 
-## Notes
+Format (one category per line):
 
-- The tool ignores subfolders by default (use `--recursive` to include them).
-- If a target file already exists, that file is skipped.
+```
+Images=jpg,jpeg,png,webp,heic
+Documents=pdf,docx,md,txt,epub,xlsx,pptx,csv,log,yaml,yml,json
+Videos=mp4,mkv,mov
+Audio=mp3,wav,flac
+Archives=zip,7z,tar,gz
+Others=
+```
+
+Notes:
+
+- Category names are case-insensitive.
+- Extensions may include or omit the leading dot.
+- Lines starting with `#` are comments.
+
+## Output Notes
+
+- The tool ignores subfolders by default unless `--recursive` is set.
+- It records the last scan in `.rusty-sort-state.txt` in the **source** folder to report changes between runs.
 - If you want it to continuously watch a folder and auto-sort new files, that would be a separate "watch mode" feature.
-- The tool stores the last scan in `.rusty-sort-state.txt` to report changes between runs.
 
 ## Project Structure
 
@@ -107,5 +108,6 @@ rusty-sort/
 │   ├── main.rs
 │   ├── organizer.rs
 │   └── rules.rs
+├── rules.txt
 └── README.md
 ```
