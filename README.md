@@ -7,7 +7,7 @@ A simple Rust CLI that organizes files in a folder into category subfolders by e
 - Scans a single directory (no recursion).
 - Categorizes by extension: Images, Documents, Videos, Audio, Archives, Others.
 - Creates category folders only when needed.
-- Safe by default: no overwrites.
+- Safe by default: no overwrites (existing targets are skipped).
 - `--dry-run` preview with optional confirmation.
 - Summary counts per category.
 
@@ -69,7 +69,7 @@ Proceed with these moves? (y/n):
 ## Notes
 
 - The tool ignores subfolders (files only).
-- If any target file already exists, the run stops with an error.
+- If a target file already exists, that file is skipped.
 
 ## Project Structure
 

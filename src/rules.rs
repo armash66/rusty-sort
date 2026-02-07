@@ -69,3 +69,45 @@ pub fn classify(path: &Path) -> Category {
         Category::Others
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{classify, Category};
+    use std::path::Path;
+
+    #[test]
+    fn classify_images() {
+        assert_eq!(classify(Path::new("photo.JPG")), Category::Images);
+        assert_eq!(classify(Path::new("icon.png")), Category::Images);
+    }
+
+    #[test]
+    fn classify_documents() {
+        assert_eq!(classify(Path::new("report.pdf")), Category::Documents);
+        assert_eq!(classify(Path::new("notes.md")), Category::Documents);
+    }
+
+    #[test]
+    fn classify_videos() {
+        assert_eq!(classify(Path::new("movie.mkv")), Category::Videos);
+        assert_eq!(classify(Path::new("clip.MP4")), Category::Videos);
+    }
+
+    #[test]
+    fn classify_audio() {
+        assert_eq!(classify(Path::new("song.mp3")), Category::Audio);
+        assert_eq!(classify(Path::new("voice.WAV")), Category::Audio);
+    }
+
+    #[test]
+    fn classify_archives() {
+        assert_eq!(classify(Path::new("backup.zip")), Category::Archives);
+        assert_eq!(classify(Path::new("bundle.tar")), Category::Archives);
+    }
+
+    #[test]
+    fn classify_others() {
+        assert_eq!(classify(Path::new("file")), Category::Others);
+        assert_eq!(classify(Path::new("weird.ext")), Category::Others);
+    }
+}

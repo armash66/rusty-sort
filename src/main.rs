@@ -59,8 +59,11 @@ fn run() -> io::Result<()> {
         }
     }
 
-    organizer::apply_moves(&plans)?;
-    println!("Moved {} file(s).", plans.len());
+    let result = organizer::apply_moves(&plans)?;
+    println!("Moved {} file(s).", result.moved);
+    if result.skipped > 0 {
+        println!("Skipped {} file(s) (target exists).", result.skipped);
+    }
 
     Ok(())
 }

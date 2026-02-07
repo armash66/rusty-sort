@@ -24,6 +24,11 @@ pub struct MovePlan {
     pub category: Category,
 }
 
+pub struct MoveResult {
+    pub moved: usize,
+    pub skipped: usize,
+}
+
 pub fn plan_moves(dir: &Path, files: &[PathBuf]) -> Vec<MovePlan> {
     let mut plans = Vec::new();
 
@@ -46,24 +51,23 @@ pub fn plan_moves(dir: &Path, files: &[PathBuf]) -> Vec<MovePlan> {
     plans
 }
 
-pub fn apply_moves(plans: &[MovePlan]) -> io::Result<()> {
-    for plan in plans {
-        if plan.target.exists() {
-            return Err(io::Error::new(
-                io::ErrorKind::AlreadyExists,
-                format!("Target already exists: {}", plan.target.display()),
-            ));
-        }
-    }
+pub fn apply_moves(plans: &[MovePlan]) -> io::Result<MoveResult> {
+    let mut moved = 0usize;
+    let mut skipped = 0usize;
 
     for plan in plans {
+        if plan.target.exists() {
+            skipped += 1;
+            continue;
+        }
         if let Some(parent) = plan.target.parent() {
             fs::create_dir_all(parent)?;
         }
         fs::rename(&plan.source, &plan.target)?;
+        moved += 1;
     }
 
-    Ok(())
+    Ok(MoveResult { moved, skipped })
 }
 
 fn category_folder_name(category: Category) -> &'static str {
